@@ -1,0 +1,11 @@
+[package]
+name = "workdir"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.4", features = ["cargo"] }
+color-eyre = "0.6.3"
+
+# [profile.dev.package.backtrace]
+# opt-level = 3
