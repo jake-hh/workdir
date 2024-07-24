@@ -2,3 +2,5 @@
 /archive
 
 Cargo.lock
+
+*.md
