@@ -1,10 +1,13 @@
 #![allow(dead_code, unused_variables)]
 
-use color_eyre::eyre::Result;
-
 use clap::{arg, command, value_parser, Command};
+use color_eyre::eyre;
+use std::path::Path;
+use std::fs;
 
-fn main() -> Result<()> {
+static PATH_FILE: &str = "/tmp/myfile";
+
+fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
 	println!();
 
@@ -30,7 +33,7 @@ fn main() -> Result<()> {
         .get_matches();
 
     match args.subcommand() {
-        Some(("list", _))          => list(),
+        Some(("list", _))          => list()?,
         Some(("push", _))          => push(),
         Some(("save", subargs))    => save(subargs.get_one::<u8>("num")),
         Some(("restore", subargs)) => restore(subargs.get_one::<u8>("num")),
@@ -40,8 +43,14 @@ fn main() -> Result<()> {
 	Ok(())
 }
 
-fn list() {
-	println!("'wd list' was used")
+fn list() -> eyre::Result<()> {
+	let lines = read_lines()?;
+
+	println!("PATHS");
+	for i in 1..lines.len()+1 {
+		println!("[{}] {}", i, lines[i-1]);
+	}
+	Ok(())
 }
 
 fn push() {
@@ -54,4 +63,20 @@ fn save (num: Option<&u8>) {
 
 fn restore (num: Option<&u8>) {
 	println!("'wd restore' was used, num is: {:?}", num);
+}
+
+fn read_lines() -> eyre::Result<Vec<String>> {
+	let mut result = Vec::new();
+	let file = Path::new(PATH_FILE);
+
+	if !file.try_exists().expect("Can't check existence of path file") {
+		return Err(eyre::eyre!("path file doesn't exist"));
+	}
+
+	let text = fs::read_to_string(file).expect("Can't read path file");
+
+	for line in text.lines() {
+		result.push(line.to_string());
+	}
+	Ok(result)
 }
