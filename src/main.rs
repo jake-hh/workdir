@@ -36,8 +36,8 @@ fn main() -> eyre::Result<()> {
         Some(("list", _))          => list()?,
         Some(("push", _))          => push(),
         Some(("save", subargs))    => save(subargs.get_one::<u8>("num")),
-        Some(("restore", subargs)) => restore(subargs.get_one::<u8>("num")),
-        _                          => restore(None),
+        Some(("restore", subargs)) => restore(subargs.get_one::<u8>("num"))?,
+        _                          => restore(None)?,
 	}
 
 	Ok(())
@@ -61,8 +61,25 @@ fn save (num: Option<&u8>) {
 	println!("'wd save' was used, num is: {:?}", num);
 }
 
-fn restore (num: Option<&u8>) {
-	println!("'wd restore' was used, num is: {:?}", num);
+fn restore (num: Option<&u8>) -> eyre::Result<()> {
+	
+	let id: usize = match num {
+		Some(npos) => (npos -1) as usize,
+		None => 0
+	};
+
+	let lines = read_lines()?;
+
+	if id >= lines.len() {
+		return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
+	}
+
+	let line = &lines[id];
+
+	// cd to that path
+	println!("CHDIR {}", line);
+
+	Ok(())
 }
 
 fn read_lines() -> eyre::Result<Vec<String>> {
