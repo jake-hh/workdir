@@ -68,7 +68,13 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 		Some(npos) => (npos -1) as usize,
 		None => 0
 	};
+
 	let path_str = path.expect("current path was not provided");
+
+	if !Path::new(path_str).is_dir() {
+		return Err(eyre::eyre!("'{}' is not a directory", path_str));
+	}
+
 
 	println!("'wd save' was used, id is: {:?}, path is {:?}", id, path_str);
 
@@ -99,6 +105,11 @@ fn restore (num: Option<&u8>) -> eyre::Result<()> {
 	}
 
 	let line = &lines[id];
+
+	if !Path::new(line).is_dir() {
+		// remove that path from the list
+		return Err(eyre::eyre!("'{}' is not an existing directory", line));
+	}
 
 	// cd to that path
 	println!("CHDIR {}", line);
