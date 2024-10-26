@@ -75,9 +75,6 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 		return Err(eyre::eyre!("'{}' is not a directory", path_str));
 	}
 
-
-	println!("'wd save' was used, id is: {:?}, path is {:?}", id, path_str);
-
 	let mut lines = read_lines()?;
 
 	if id > lines.len() {
@@ -85,9 +82,9 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 	}
 	
 	lines.insert(id, path_str.clone());
-	
 	save_lines(lines)?;
-	
+
+	println!("saved: [{}] {}", id, path_str);
 	Ok(())
 }
 
