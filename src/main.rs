@@ -35,6 +35,13 @@ fn main() -> eyre::Result<()> {
                 .arg(
 					arg!([num] "Optional path number")
 					.value_parser(value_parser!(u8).range(1..10))))
+		.subcommand(
+			Command::new("delete")
+				.about("Delete selected path")
+				.arg(
+					arg!([num] "Path number")
+					.required(true)
+					.value_parser(value_parser![u8].range(1..10))))
         .get_matches();
 
     match args.subcommand() {
@@ -42,6 +49,7 @@ fn main() -> eyre::Result<()> {
         Some(("push", _))          => push(),
         Some(("save", subargs))    => save(subargs.get_one::<String>("path"), subargs.get_one::<u8>("num"))?,
         Some(("restore", subargs)) => restore(subargs.get_one::<u8>("num"))?,
+		Some(("delete", subargs))  => delete(subargs.get_one::<u8>("num"))?,
         _                          => restore(None)?,
 	}
 
@@ -113,6 +121,26 @@ fn restore (num: Option<&u8>) -> eyre::Result<()> {
 
 	Ok(())
 }
+
+fn delete (num: Option<&u8>) -> eyre::Result<()> {
+
+	let id = *num.expect("'num' was not provided") as usize -1;
+
+	let mut lines = read_lines()?;
+
+	if id > lines.len() {
+		return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
+	}
+
+	let path_str: String = lines[id].clone();
+
+	lines.remove(id);
+	save_lines(lines)?;
+
+	println!("deleted: [{}] {}", id +1, path_str);
+	Ok(())
+}
+
 
 fn read_lines() -> eyre::Result<Vec<String>> {
 	let mut result = Vec::new();
