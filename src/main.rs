@@ -10,7 +10,6 @@ static PATH_FILE: &str = "/tmp/myfile";
 
 fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
-	println!();
 
 	let args = command!() 	// requires 'cargo' feature
 		.about("workdir - fast working directory path switcher")
@@ -42,6 +41,12 @@ fn main() -> eyre::Result<()> {
 					arg!([num] "Path number")
 					.required(true)
 					.value_parser(value_parser![u8].range(1..10))))
+		.subcommand(
+			Command::new("wrapper")
+				.about("Dump wrapper function")
+				.arg(
+					arg!([shell] "Shell type")
+					.value_parser(["sh", "bash", "zsh"])))
         .get_matches();
 
     match args.subcommand() {
@@ -50,6 +55,7 @@ fn main() -> eyre::Result<()> {
         Some(("save", subargs))    => save(subargs.get_one::<String>("path"), subargs.get_one::<u8>("num"))?,
         Some(("restore", subargs)) => restore(subargs.get_one::<u8>("num"))?,
 		Some(("delete", subargs))  => delete(subargs.get_one::<u8>("num"))?,
+		Some(("wrapper", subargs)) => dump_wrapper(subargs.get_one::<String>("shell"))?,
         _                          => restore(None)?,
 	}
 
@@ -57,6 +63,8 @@ fn main() -> eyre::Result<()> {
 }
 
 fn list() -> eyre::Result<()> {
+	println!();
+
 	let lines = read_lines()?;
 
 	println!("PATHS");
@@ -67,10 +75,12 @@ fn list() -> eyre::Result<()> {
 }
 
 fn push() {
+	println!();
 	println!("'wd push' was used")
 }
 
 fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
+	println!();
 
 	let id: usize = match num {
 		Some(npos) => (npos -1) as usize,
@@ -106,6 +116,7 @@ fn restore (num: Option<&u8>) -> eyre::Result<()> {
 	let lines = read_lines()?;
 
 	if id >= lines.len() {
+		println!();
 		return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
 	}
 
@@ -113,6 +124,7 @@ fn restore (num: Option<&u8>) -> eyre::Result<()> {
 
 	if !Path::new(line).is_dir() {
 		// remove that path from the list
+		println!();
 		return Err(eyre::eyre!("'{}' is not an existing directory", line));
 	}
 
@@ -123,6 +135,7 @@ fn restore (num: Option<&u8>) -> eyre::Result<()> {
 }
 
 fn delete (num: Option<&u8>) -> eyre::Result<()> {
+	println!();
 
 	let id = *num.expect("'num' was not provided") as usize -1;
 
@@ -138,6 +151,12 @@ fn delete (num: Option<&u8>) -> eyre::Result<()> {
 	save_lines(lines)?;
 
 	println!("deleted: [{}] {}", id +1, path_str);
+	Ok(())
+}
+
+fn dump_wrapper (shell: Option<&String>) -> eyre::Result<()> {
+	let function = include_str!("wrapper.sh");
+	println!("{}", function);
 	Ok(())
 }
 
