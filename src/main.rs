@@ -68,8 +68,8 @@ fn list() -> eyre::Result<()> {
 	let lines = read_lines()?;
 
 	println!("PATHS");
-	for i in 1..lines.len()+1 {
-		println!("[{}] {}", i, lines[i-1]);
+	for i in 0..lines.len() {
+		println!("[{}] {}", i +1, lines[i]);
 	}
 	Ok(())
 }
@@ -102,7 +102,7 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 	lines.insert(id, path_str.clone());
 	save_lines(lines)?;
 
-	println!("saved: [{}] {}", id, path_str);
+	println!("saved: [{}] {}", id +1, path_str);
 	Ok(())
 }
 
