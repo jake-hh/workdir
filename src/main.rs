@@ -69,7 +69,8 @@ fn list() -> eyre::Result<()> {
 
 	println!("PATHS");
 	for i in 0..lines.len() {
-		println!("[{}] {}", i +1, lines[i]);
+		let missing_star = if !Path::new(&lines[i]).is_dir() {" [*]"} else {""};
+		println!("[{}] {}{}", i +1, lines[i], missing_star);
 	}
 	Ok(())
 }
