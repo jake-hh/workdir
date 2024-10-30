@@ -99,10 +99,28 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 		return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
 	}
 	
+	let mut remove: Option<usize> = None;
+
+	for i in 0..lines.len() {
+		if &lines[i] == path_str {
+			if i == id {
+				return Err(eyre::eyre!("path '{}' already exists on thath position", lines[i]));
+			}
+			remove = Some(i);
+		}
+	}
+
+	if let Some(rm_id) = remove {
+		lines.remove(rm_id);
+	}
+
 	lines.insert(id, path_str.clone());
 	save_lines(lines)?;
 
-	println!("saved: [{}] {}", id +1, path_str);
+	match remove {
+		Some(rm_id) => println!("moved: [{}] -> [{}] {}", rm_id +1, id +1, path_str),
+		None => println!("saved: [{}] {}", id +1, path_str),
+	}
 	Ok(())
 }
 
