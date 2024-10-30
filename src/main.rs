@@ -94,11 +94,6 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 	}
 
 	let mut lines = read_lines()?;
-
-	if id > lines.len() {
-		return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
-	}
-	
 	let mut remove: Option<usize> = None;
 
 	for i in 0..lines.len() {
@@ -111,7 +106,15 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 	}
 
 	if let Some(rm_id) = remove {
+		if id >= lines.len() {
+			return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
+		}
 		lines.remove(rm_id);
+	}
+	else {
+		if id > lines.len() {
+			return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
+		}
 	}
 
 	lines.insert(id, path_str.clone());
@@ -159,7 +162,7 @@ fn delete (num: Option<&u8>) -> eyre::Result<()> {
 
 	let mut lines = read_lines()?;
 
-	if id > lines.len() {
+	if id >= lines.len() {
 		return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
 	}
 
