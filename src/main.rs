@@ -194,7 +194,9 @@ fn read_lines() -> eyre::Result<Vec<String>> {
 	let text = fs::read_to_string(file).expect("Can't read path file");
 
 	for line in text.lines() {
-		result.push(line.to_string());
+		if !line.is_empty() {
+			result.push(line.to_string());
+		}
 	}
 	Ok(result)
 }
