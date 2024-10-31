@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables)]
 
-use clap::{arg, command, value_parser, Command};
+use clap::{arg, command, value_parser, Arg, Command};
 use color_eyre::eyre;
 use std::path::Path;
 use std::io::Write;
@@ -15,6 +15,7 @@ fn main() -> eyre::Result<()> {
 		.about("workdir - fast working directory path switcher")
 		.author("Jake")
 		.disable_help_subcommand(true)
+		.args_conflicts_with_subcommands(true)
 
 		.subcommand(Command::new("list").about("List recent paths").aliases(["l", "ls"]))
 		.subcommand(Command::new("push").about("Push path on top of list"))
@@ -50,6 +51,11 @@ fn main() -> eyre::Result<()> {
 				.arg(
 					arg!([shell] "Shell type")
 					.value_parser(["sh", "bash", "zsh"])))
+		.arg(
+			Arg::new("num")
+			.help("Path number to restore")
+			.value_parser(value_parser![u8].range(1..10)))
+			//arg!([num] "Path number to restore")
         .get_matches();
 
     match args.subcommand() {
@@ -59,7 +65,7 @@ fn main() -> eyre::Result<()> {
         Some(("restore", subargs)) => restore(subargs.get_one::<u8>("num"))?,
 		Some(("delete", subargs))  => delete(subargs.get_one::<u8>("num"))?,
 		Some(("wrapper", subargs)) => dump_wrapper(subargs.get_one::<String>("shell"))?,
-        _                          => restore(None)?,
+        _                          => restore(args.get_one::<u8>("num"))?
 	}
 
 	Ok(())
