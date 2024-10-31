@@ -17,55 +17,53 @@ fn main() -> eyre::Result<()> {
 		.disable_help_subcommand(true)
 		.args_conflicts_with_subcommands(true)
 
-		.subcommand(Command::new("list").about("List recent paths").aliases(["l", "ls"]))
-		.subcommand(Command::new("push").about("Push path on top of list"))
-		.subcommand(
-			Command::new("restore")
+		.subcommand(Command::new("list")
+				.about("List recent paths")
+				.aliases(["l", "ls"]))
+
+		.subcommand(Command::new("restore")
 				.about("Switch to selected path")
 				.aliases(["r", "res"])
                 .arg(
-					arg!([num] "Optional path number")
+					arg!([pos] "Optional path position")
 					.value_parser(value_parser!(u8).range(1..10))))
-		.subcommand(
-			Command::new("save")
+
+		.subcommand(Command::new("save")
 				.about("Save path")
 				.aliases(["s"])
                 .arg(
-					arg!([path] "Current directory path")
-					.required(true)
+					arg!(<path> "Current directory path - provided by wrapper function - do not enter") //.hide(true)
 					.value_parser(value_parser!(String)))
                 .arg(
-					arg!([num] "Optional path number")
+					arg!([pos] "Optional path position")
 					.value_parser(value_parser!(u8).range(1..10))))
-		.subcommand(
-			Command::new("delete")
+
+		.subcommand(Command::new("delete")
 				.about("Delete selected path")
 				.aliases(["d", "del"])
 				.arg(
-					arg!([num] "Path number")
-					.required(true)
+					arg!(<pos> "Path position")
 					.value_parser(value_parser![u8].range(1..10))))
-		.subcommand(
-			Command::new("wrapper")
+
+		.subcommand(Command::new("wrapper")
 				.about("Dump wrapper function")
 				.arg(
 					arg!([shell] "Shell type")
 					.value_parser(["sh", "bash", "zsh"])))
-		.arg(
-			Arg::new("num")
-			.help("Path number to restore")
+
+		.arg(Arg::new("pos")
+			.help("Optional path position to restore")
 			.value_parser(value_parser![u8].range(1..10)))
-			//arg!([num] "Path number to restore")
+
         .get_matches();
 
     match args.subcommand() {
         Some(("list", _))          => list()?,
-        Some(("push", _))          => push(),
-        Some(("save", subargs))    => save(subargs.get_one::<String>("path"), subargs.get_one::<u8>("num"))?,
-        Some(("restore", subargs)) => restore(subargs.get_one::<u8>("num"))?,
-		Some(("delete", subargs))  => delete(subargs.get_one::<u8>("num"))?,
+        Some(("save", subargs))    => save(subargs.get_one::<String>("path"), subargs.get_one::<u8>("pos"))?,
+        Some(("restore", subargs)) => restore(subargs.get_one::<u8>("pos"))?,
+		Some(("delete", subargs))  => delete(subargs.get_one::<u8>("pos"))?,
 		Some(("wrapper", subargs)) => dump_wrapper(subargs.get_one::<String>("shell"))?,
-        _                          => restore(args.get_one::<u8>("num"))?
+        _                          => restore(args.get_one::<u8>("pos"))?
 	}
 
 	Ok(())
@@ -84,16 +82,11 @@ fn list() -> eyre::Result<()> {
 	Ok(())
 }
 
-fn push() {
-	println!();
-	println!("'wd push' was used")
-}
-
-fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
+fn save (path: Option<&String>, pos: Option<&u8>) -> eyre::Result<()> {
 	println!();
 
-	let id: usize = match num {
-		Some(npos) => (npos -1) as usize,
+	let id: usize = match pos {
+		Some(num) => (num -1) as usize,
 		None => 0
 	};
 
@@ -117,13 +110,13 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 
 	if let Some(rm_id) = remove {
 		if id >= lines.len() {
-			return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
+			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, lines.len()));
 		}
 		lines.remove(rm_id);
 	}
 	else {
 		if id > lines.len() {
-			return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
+			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, lines.len()));
 		}
 	}
 
@@ -137,10 +130,10 @@ fn save (path: Option<&String>, num: Option<&u8>) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn restore (num: Option<&u8>) -> eyre::Result<()> {
+fn restore (pos: Option<&u8>) -> eyre::Result<()> {
 	
-	let id: usize = match num {
-		Some(npos) => (npos -1) as usize,
+	let id: usize = match pos {
+		Some(num) => (num -1) as usize,
 		None => 0
 	};
 
@@ -148,7 +141,7 @@ fn restore (num: Option<&u8>) -> eyre::Result<()> {
 
 	if id >= lines.len() {
 		println!();
-		return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
+		return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, lines.len()));
 	}
 
 	let line = &lines[id];
@@ -165,15 +158,15 @@ fn restore (num: Option<&u8>) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn delete (num: Option<&u8>) -> eyre::Result<()> {
+fn delete (pos: Option<&u8>) -> eyre::Result<()> {
 	println!();
 
-	let id = *num.expect("'num' was not provided") as usize -1;
+	let id = *pos.expect("'[pos]' was not provided") as usize -1;
 
 	let mut lines = read_lines()?;
 
 	if id >= lines.len() {
-		return Err(eyre::eyre!("invalid value '{}' for '[num]': only {} paths are saved", id + 1, lines.len()));
+		return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, lines.len()));
 	}
 
 	let path_str: String = lines[id].clone();
