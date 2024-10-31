@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.4", features = ["cargo"] }
 color-eyre = "0.6.3"
+shellexpand = "3.1.0"
 
 # [profile.dev.package.backtrace]
 # opt-level = 3

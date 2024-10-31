@@ -6,7 +6,7 @@ use std::path::Path;
 use std::io::Write;
 use std::fs;
 
-static PATH_FILE: &str = "/tmp/myfile";
+static PATH_FILE: &str = "~/.local/state/workdir";
 
 fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
@@ -187,7 +187,8 @@ fn dump_wrapper (shell: Option<&String>) -> eyre::Result<()> {
 
 fn read_lines() -> eyre::Result<Vec<String>> {
 	let mut result = Vec::new();
-	let file = Path::new(PATH_FILE);
+	let fstr = shellexpand::tilde(PATH_FILE).into_owned();
+	let file = Path::new(&fstr);
 
 	if !file.try_exists().expect("Can't check existence of path file") {
 		return Err(eyre::eyre!("path file doesn't exist"));
@@ -204,7 +205,8 @@ fn read_lines() -> eyre::Result<Vec<String>> {
 }
 
 fn save_lines (lines: Vec<String>) -> eyre::Result<()> {
-	let file = Path::new(PATH_FILE);
+	let fstr = shellexpand::tilde(PATH_FILE).into_owned();
+	let file = Path::new(&fstr);
 
 	if !file.try_exists().expect("Can't check existence of path file") {
 		return Err(eyre::eyre!("path file doesn't exist"));
