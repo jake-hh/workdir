@@ -8,7 +8,7 @@ function wd {
         subcmd="$1"
         shift
 
-        if [ "$subcmd" = "save" ]
+        if [ "$subcmd" = "save" ] || [ "$subcmd" = "s" ]
         then
             x=`cargo run -- "$subcmd" "$PWD" "$@"`
         else

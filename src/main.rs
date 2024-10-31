@@ -16,17 +16,19 @@ fn main() -> eyre::Result<()> {
 		.author("Jake")
 		.disable_help_subcommand(true)
 
-		.subcommand(Command::new("list").about("List recent paths"))
+		.subcommand(Command::new("list").about("List recent paths").aliases(["l", "ls"]))
 		.subcommand(Command::new("push").about("Push path on top of list"))
 		.subcommand(
 			Command::new("restore")
 				.about("Switch to selected path")
+				.aliases(["r", "res"])
                 .arg(
 					arg!([num] "Optional path number")
 					.value_parser(value_parser!(u8).range(1..10))))
 		.subcommand(
 			Command::new("save")
 				.about("Save path")
+				.aliases(["s"])
                 .arg(
 					arg!([path] "Current directory path")
 					.required(true)
@@ -37,6 +39,7 @@ fn main() -> eyre::Result<()> {
 		.subcommand(
 			Command::new("delete")
 				.about("Delete selected path")
+				.aliases(["d", "del"])
 				.arg(
 					arg!([num] "Path number")
 					.required(true)
