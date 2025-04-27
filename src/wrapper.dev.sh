@@ -19,9 +19,12 @@ function wd {
 		fi
 	fi
 
-	if [ "${x::5}" = "CHDIR" ]
+	if [ "${x::6}" = "CHDIRV" ]
 	then
-		echo "changing dir to ${x:6}"
+		echo "changing dir to ${x:7}"
+		cd "${x:7}"
+	elif [ "${x::5}" = "CHDIR" ]
+	then
 		cd "${x:6}"
 	else
 		echo "$x"

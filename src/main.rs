@@ -26,7 +26,8 @@ fn main() -> eyre::Result<()> {
 				.aliases(["r", "res"])
 				.arg(
 					arg!([pos] "Optional path position")
-					.value_parser(value_parser!(u8).range(1..10))))
+					.value_parser(value_parser!(u8).range(1..10)))
+				.arg(arg!(-v --verbose "Show verbose info")))
 
 		.subcommand(Command::new("save")
 				.about("Save path")
@@ -54,16 +55,17 @@ fn main() -> eyre::Result<()> {
 		.arg(Arg::new("pos")
 			.help("Optional path position to restore")
 			.value_parser(value_parser![u8].range(1..10)))
+		.arg(arg!(-v --verbose "Show verbose info"))
 
 		.get_matches();
 
 	match args.subcommand() {
 		Some(("list", _))          => list()?,
 		Some(("save", subargs))    => save(subargs.get_one::<String>("path"), subargs.get_one::<u8>("pos"))?,
-		Some(("restore", subargs)) => restore(subargs.get_one::<u8>("pos"))?,
+		Some(("restore", subargs)) => restore(subargs.get_one::<u8>("pos"), subargs.get_flag("verbose"))?,
 		Some(("delete", subargs))  => delete(subargs.get_one::<u8>("pos"))?,
 		Some(("wrapper", subargs)) => dump_wrapper(subargs.get_one::<String>("shell"))?,
-		_                          => restore(args.get_one::<u8>("pos"))?
+		_                          => restore(args.get_one::<u8>("pos"), args.get_flag("verbose"))?
 	}
 
 	Ok(())
@@ -126,7 +128,7 @@ fn save (path: Option<&String>, pos: Option<&u8>) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn restore (pos: Option<&u8>) -> eyre::Result<()> {
+fn restore (pos: Option<&u8>, verbose: bool) -> eyre::Result<()> {
 
 	let id: usize = match pos {
 		Some(num) => (num -1) as usize,
@@ -147,7 +149,11 @@ fn restore (pos: Option<&u8>) -> eyre::Result<()> {
 	}
 
 	// cd to that path
-	println!("CHDIR {}", line);
+	if verbose {
+		println!("CHDIRV {}", line);
+	} else {
+		println!("CHDIR {}", line);
+	}
 
 	Ok(())
 }
