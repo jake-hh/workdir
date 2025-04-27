@@ -1,21 +1,21 @@
 # wrapper function for workdir.rs
-# release version
+# development version
 #
-# $> workdir wrapper >> ~/.zsh/custom/workdir.sh
+# $> source src/wrapper.dev.sh
 
 function wd {
 	if [ -z "$1" ]
 	then
-		x=`wrapper`
+		x=`cargo run --`
 	else
 		subcmd="$1"
 		shift
 
 		if [ "$subcmd" = "save" ] || [ "$subcmd" = "s" ]
 		then
-			x=`wrapper "$subcmd" "$PWD" "$@"`
+			x=`cargo run -- "$subcmd" "$PWD" "$@"`
 		else
-			x=`wrapper "$subcmd" "$@"`
+			x=`cargo run -- "$subcmd" "$@"`
 		fi
 	fi
 
