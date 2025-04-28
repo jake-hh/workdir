@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_variables)]
 
 use clap::{arg, command, value_parser, Arg, Command};
-use color_eyre::eyre;
+use color_eyre::eyre;	// note: does not preserve printing order
 use std::path::Path;
 use std::io::Write;
 use std::fs;
@@ -9,7 +9,7 @@ use std::fs;
 static PATH_FILE: &str = "~/.local/state/workdir";
 
 // Max amount of stored paths
-const LIMIT: usize = 10;
+const LIMIT: usize = 20;
 
 fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
@@ -119,6 +119,9 @@ fn save (path: Option<&String>, pos: Option<&u8>) -> eyre::Result<()> {
 	else {
 		if id > size {
 			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, size));
+		}
+		else if size >= LIMIT {
+			return Err(eyre::eyre!("limit of {} saved paths reached", LIMIT))
 		}
 	}
 
