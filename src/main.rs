@@ -8,6 +8,9 @@ use std::fs;
 
 static PATH_FILE: &str = "~/.local/state/workdir";
 
+// Max amount of stored paths
+const LIMIT: usize = 10;
+
 fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
 
@@ -26,7 +29,7 @@ fn main() -> eyre::Result<()> {
 				.aliases(["r", "res"])
 				.arg(
 					arg!([pos] "Optional path position")
-					.value_parser(value_parser!(u8).range(1..10)))
+					.value_parser(value_parser!(u8).range(1..LIMIT as i64)))
 				.arg(arg!(-v --verbose "Show verbose info")))
 
 		.subcommand(Command::new("save")
@@ -37,14 +40,14 @@ fn main() -> eyre::Result<()> {
 					.value_parser(value_parser!(String)))
 				.arg(
 					arg!([pos] "Optional path position")
-					.value_parser(value_parser!(u8).range(1..10))))
+					.value_parser(value_parser!(u8).range(1..LIMIT as i64))))
 
 		.subcommand(Command::new("delete")
 				.about("Delete selected path")
 				.aliases(["d", "del"])
 				.arg(
 					arg!(<pos> "Path position")
-					.value_parser(value_parser![u8].range(1..10))))
+					.value_parser(value_parser![u8].range(1..LIMIT as i64))))
 
 		.subcommand(Command::new("wrapper")
 				.about("Dump wrapper function")
@@ -54,7 +57,7 @@ fn main() -> eyre::Result<()> {
 
 		.arg(Arg::new("pos")
 			.help("Optional path position to restore")
-			.value_parser(value_parser![u8].range(1..10)))
+			.value_parser(value_parser![u8].range(1..LIMIT as i64)))
 		.arg(arg!(-v --verbose "Show verbose info"))
 
 		.get_matches();
@@ -96,8 +99,9 @@ fn save (path: Option<&String>, pos: Option<&u8>) -> eyre::Result<()> {
 
 	let mut lines = read_lines()?;
 	let mut remove: Option<usize> = None;
+	let size = lines.len();
 
-	for i in 0..lines.len() {
+	for i in 0..size {
 		if &lines[i] == path_str {
 			if i == id {
 				return Err(eyre::eyre!("path '{}' already exists on thath position", lines[i]));
@@ -107,14 +111,14 @@ fn save (path: Option<&String>, pos: Option<&u8>) -> eyre::Result<()> {
 	}
 
 	if let Some(rm_id) = remove {
-		if id >= lines.len() {
-			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, lines.len()));
+		if id >= size {
+			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, size));
 		}
 		lines.remove(rm_id);
 	}
 	else {
-		if id > lines.len() {
-			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, lines.len()));
+		if id > size {
+			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, size));
 		}
 	}
 
