@@ -2,6 +2,7 @@
 
 use clap::{arg, command, value_parser, Arg, Command};
 use color_eyre::eyre;	// note: does not preserve printing order
+use colored::{Colorize, ColoredString, control};
 use std::path::Path;
 use std::io::Write;
 use std::fs;
@@ -12,6 +13,7 @@ static PATH_FILE: &str = "~/.local/state/workdir";
 const LIMIT: usize = 20;
 
 fn main() -> eyre::Result<()> {
+	control::set_override(true);	// Forces colored output
 	color_eyre::install()?;
 
 	let args = command!() 	// requires 'cargo' feature
@@ -154,8 +156,8 @@ fn save (path: Option<&String>, pos: Option<&u8>) -> eyre::Result<()> {
 	save_lines(lines)?;
 
 	match remove {
-		Some(rm_id) => println!("moved: [{}] -> [{}] {}", rm_id +1, id +1, path_str),
-		None => println!("saved: [{}] {}", id +1, path_str),
+		Some(rm_id) => print_ok("moved".cyan(), format!("{} -> {} {}", fmt_number(rm_id), fmt_number(id), path_str)),
+		None => print_ok("saved".green(), format!("{} {}", fmt_number(id), path_str)),
 	}
 
 	Ok(())
@@ -206,7 +208,7 @@ fn delete (pos: Option<&u8>) -> eyre::Result<()> {
 	lines.remove(id);
 	save_lines(lines)?;
 
-	println!("deleted: [{}] {}", id +1, path_str);
+	print_ok("deleted".purple(), format!("{} {}", fmt_number(id), path_str));
 
 	Ok(())
 }
@@ -221,8 +223,11 @@ fn dump_wrapper (shell: Option<&String>) -> eyre::Result<()> {
 
 fn list_lines(lines: Vec<String>, n: usize) -> eyre::Result<()> {
 	for i in 0..n {
-		let missing_star = if !Path::new(&lines[i]).is_dir() {" [*]"} else {""};
-		println!("[{}] {}{}", i +1, lines[i], missing_star);
+		if !Path::new(&lines[i]).is_dir() {
+			println!("{}", format!("{} {} [*]", fmt_number(i), lines[i]).strikethrough().dimmed());
+		} else {
+			println!("{} {}", fmt_number(i), lines[i]);
+		};
 	}
 
 	Ok(())
@@ -265,3 +270,15 @@ fn save_lines (lines: Vec<String>) -> eyre::Result<()> {
 
 	Ok(())
 }
+
+fn print_ok(header: ColoredString, body: String) {
+	println!("{} {}", header.bold(), body);
+}
+
+fn fmt_number(id: usize) -> String {
+	format!("[{}]", id +1)
+}
+
+// fn fmt_path(id: usize, path: &String) -> String {
+// 	format!("{} {}", fmt_number(id), path)
+// }
