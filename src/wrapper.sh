@@ -6,16 +6,16 @@
 function wd {
 	if [ -z "$1" ]
 	then
-		x=`wrapper`
+		x=`workdir`
 	else
 		subcmd="$1"
 		shift
 
 		if [ "$subcmd" = "save" ] || [ "$subcmd" = "s" ]
 		then
-			x=`wrapper "$subcmd" "$PWD" "$@"`
+			x=`workdir "$subcmd" "$PWD" "$@"`
 		else
-			x=`wrapper "$subcmd" "$@"`
+			x=`workdir "$subcmd" "$@"`
 		fi
 	fi
 
