@@ -1,17 +1,21 @@
 #![allow(dead_code, unused_variables)]
 
 use clap::{arg, command, value_parser, Arg, Command};
-use color_eyre::eyre;
+use color_eyre::eyre::{self, eyre};
 use colored::{Colorize, ColoredString, control};
-use std::path::Path;
+use std::cmp::min;
+use std::path::{Path, PathBuf};
 use std::io::Write;
 use std::fs;
 
 // File used to store a list of paths (working directories)
 static PATH_FILE: &str = "~/.local/state/workdir";
 
-// Max amount of stored paths
-const LIMIT: usize = 20;
+// Max amount of stored paths (plus one)
+const SAVED_PATHS_LIMIT_P1: usize = 20;
+
+// Max amount of printed lines in short list
+const SHORT_LIST_LINES_LIMIT: usize = 5;
 
 
 fn main() -> eyre::Result<()> {
@@ -31,18 +35,18 @@ fn main() -> eyre::Result<()> {
 				.about("List recent paths")
 				.aliases(["ls"])
 				.arg(
-					arg!([size] "Optional max list size")
-					.value_parser(value_parser!(u8).range(1..LIMIT as i64))))
+					arg!([length] "Optional max list length")
+					.value_parser(value_parser!(u8).range(1..SAVED_PATHS_LIMIT_P1 as i64))))
 
 		.subcommand(Command::new("l")
-				.about("List 5 recent paths"))
+				.about(format!("List {} recent paths", SHORT_LIST_LINES_LIMIT)))
 
 		.subcommand(Command::new("restore")
 				.about("Switch to selected path")
 				.aliases(["r", "res"])
 				.arg(
 					arg!([pos] "Optional path position")
-					.value_parser(value_parser!(u8).range(1..LIMIT as i64)))
+					.value_parser(value_parser!(u8).range(1..SAVED_PATHS_LIMIT_P1 as i64)))
 				.arg(arg!(-v --verbose "Show verbose info")))
 
 		.subcommand(Command::new("save")
@@ -53,14 +57,14 @@ fn main() -> eyre::Result<()> {
 					.value_parser(value_parser!(String)))
 				.arg(
 					arg!([pos] "Optional path position")
-					.value_parser(value_parser!(u8).range(1..LIMIT as i64))))
+					.value_parser(value_parser!(u8).range(1..SAVED_PATHS_LIMIT_P1 as i64))))
 
 		.subcommand(Command::new("delete")
 				.about("Delete selected path")
 				.aliases(["d", "del"])
 				.arg(
 					arg!(<pos> "Path position")
-					.value_parser(value_parser![u8].range(1..LIMIT as i64))))
+					.value_parser(value_parser![u8].range(1..SAVED_PATHS_LIMIT_P1 as i64))))
 
 		.subcommand(Command::new("wrapper")
 				.about("Dump wrapper function")
@@ -70,14 +74,14 @@ fn main() -> eyre::Result<()> {
 
 		.arg(Arg::new("pos")
 			.help("Optional path position to restore")
-			.value_parser(value_parser![u8].range(1..LIMIT as i64)))
+			.value_parser(value_parser![u8].range(1..SAVED_PATHS_LIMIT_P1 as i64)))
 		.arg(arg!(-v --verbose "Show verbose info"))
 
 		.get_matches();
 
 	// Match CLI args
 	match args.subcommand() {
-		Some(("list", subargs))    => list(subargs.get_one::<u8>("size"))?,
+		Some(("list", subargs))    => list(subargs.get_one::<u8>("length"))?,
 		Some(("l", _))                          => l()?,
 		Some(("save", subargs))    => save(subargs.get_one::<String>("path"), subargs.get_one::<u8>("pos"))?,
 		Some(("restore", subargs)) => restore(subargs.get_one::<u8>("pos"), subargs.get_flag("verbose"))?,
@@ -91,25 +95,19 @@ fn main() -> eyre::Result<()> {
 
 
 // List paths
-fn list(size: Option<&u8>) -> eyre::Result<()> {
+fn list(arg_length: Option<&u8>) -> eyre::Result<()> {
 	let lines = read_lines()?;
+	let n_lines = lines.len();
 
-	// Get number of printed lines...
-	let n: usize = match size {
-		// ...from specified size arg
-		Some(num) => {
-			if num.clone() as usize > lines.len() {
-				// Size arg is bigger than lines => Show error msg
-				return Err(eyre::eyre!("invalid value '{}' for '[size]': only {} paths are saved", num, lines.len()));
-			}
-			num.clone() as usize
-		},
-		// ...list all lines as default
-		None => lines.len()
-	};
+	// Get number of printed lines from specified length arg, list all lines as default
+	let n: usize = arg_length.map_or(n_lines, |&l| l as usize);
 
-	list_lines(lines, n)?;
+	// If length arg is bigger than number of lines => Throw error msg
+	if n > n_lines {
+		return Err(eyre!("invalid value '{}' for '[length]': only {} paths are saved", n, n_lines));
+	}
 
+	print_lines(lines, n)?;
 	Ok(())
 }
 
@@ -118,93 +116,86 @@ fn l() -> eyre::Result<()> {
 	let lines = read_lines()?;
 
 	// Get number of printed lines
-	let n: usize = if lines.len() < 5 { lines.len() } else { 5 };
+	let n: usize = min(lines.len(), SHORT_LIST_LINES_LIMIT);
 
-	list_lines(lines, n)?;
-
+	print_lines(lines, n)?;
 	Ok(())
 }
 
 // Save or move current PWD path in path list
-fn save (path: Option<&String>, pos: Option<&u8>) -> eyre::Result<()> {
+fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> eyre::Result<()> {
 
-	// Get new path id...
-	let id: usize = match pos {
-		Some(num) => (num -1) as usize,  // ...from pos arg
-		None => 0                            //  ...default is 0
-	};
+	// Get new path id from pos arg, default to 0
+	let id = arg_pos.map(pos_to_id()).unwrap_or(0);
 
 	// Unwrap path
-	let path_str = path.expect("current path was not provided. Please use the included wrapper");
+	let path: &String = arg_path.expect("current path was not provided. Please use the included wrapper");
 
 	// Check if path is a directory
-	if !Path::new(path_str).is_dir() {
-		return Err(eyre::eyre!("'{}' is not a directory", path_str));
+	if !Path::new(path).is_dir() {
+		return Err(eyre!("'{}' is not a directory", path));
 	}
 
-	// Optional id of a line to remove
-	let mut remove: Option<usize> = None;
 	let mut lines = read_lines()?;
-	let size = lines.len();
+	let n_lines = lines.len();
 
-	// Check lines list
-	for i in 0..size {
-		if &lines[i] == path_str {
-			if i == id {
-				// Line already exists at that position => Show error msg
-				return Err(eyre::eyre!("path '{}' already exists on thath position", lines[i]));
-			}
-			// Line already exists at a different position => Mark old id for removal
-			remove = Some(i);
-		}
-	}
+	// Find existing id of path in lines list, if any
+	let existing_id = lines.iter().position(|l| l == path);
 
-	if let Some(rm_id) = remove {
+	if let Some(ex_id) = existing_id {
+		// Will be moving the path to new position
+
 		// Check id
-		if id >= size {
-			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, size));
+		if id >= n_lines {
+			return get_invalid_pos_err(id, n_lines);
 		}
-		// Remove old path from list
-		lines.remove(rm_id);
+
+		// If line already exists at that position => Throw error msg
+		if ex_id == id {
+			return Err(eyre!("path '{}' already exists on that position", lines[id]));
+		}
+
+		// Line already exists at a different position => Remove old path from list
+		lines.remove(ex_id);
 	}
 	else {
+		// Will be adding path to list
+
 		// Check id
-		if id > size {
-			return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, size));
+		if id > n_lines {
+			return get_invalid_pos_err(id, n_lines);
 		}
-		// Check size
-		else if size >= LIMIT {
-			return Err(eyre::eyre!("limit of {} saved paths reached", LIMIT))
+
+		// Check n_lines
+		if n_lines >= SAVED_PATHS_LIMIT_P1 {
+			return Err(eyre!("limit of {} saved paths reached", SAVED_PATHS_LIMIT_P1))
 		}
 	}
 
 	// Save new path in list
-	lines.insert(id, path_str.clone());
+	lines.insert(id, path.clone());
 	save_lines(lines)?;
 
 	// Print confirmation message
-	match remove {
-		Some(rm_id) => print_ok("moved".cyan(), format!("{} -> {} {}", fmt_number(rm_id), fmt_number(id), path_str)),
-		None => print_ok("saved".green(), format!("{} {}", fmt_number(id), path_str)),
+	match existing_id {
+		Some(rm_id) => print_ok("moved".cyan(), format!("{} -> {} {}", fmt_id(rm_id), fmt_id(id), path)),
+		None => print_ok("saved".green(), format!("{} {}", fmt_id(id), path)),
 	}
 
 	Ok(())
 }
 
 // Change directory to one of saved paths
-fn restore (pos: Option<&u8>, verbose: bool) -> eyre::Result<()> {
+fn restore(arg_pos: Option<&u8>, arg_verbose: bool) -> eyre::Result<()> {
 
-	// Get path id...
-	let id: usize = match pos {
-		Some(num) => (num -1) as usize,  // ...from pos arg
-		None => 0                            //  ...default is 0
-	};
+	// Get path id from pos arg, default to 0
+	let id = arg_pos.map(pos_to_id()).unwrap_or(0);
 
 	let lines = read_lines()?;
 
 	// Check id
 	if id >= lines.len() {
-		return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, lines.len()));
+		return get_invalid_pos_err(id, lines.len());
 	}
 
 	// Get selected line
@@ -213,11 +204,11 @@ fn restore (pos: Option<&u8>, verbose: bool) -> eyre::Result<()> {
 	// Check if path is a directory
 	if !Path::new(line).is_dir() {
 		// TODO: Remove that path from the list
-		return Err(eyre::eyre!("'{}' is not an existing directory", line));
+		return Err(eyre!("'{}' is not an existing directory", line));
 	}
 
 	// Tell the wrapper to cd to selected path
-	if verbose {
+	if arg_verbose {
 		println!("CHDIRV {}", line);  // Use 'change dir verbose' flag
 	} else {
 		println!("CHDIR {}", line);   // Use 'change dir' flag
@@ -227,49 +218,48 @@ fn restore (pos: Option<&u8>, verbose: bool) -> eyre::Result<()> {
 }
 
 // Delete one of saved paths
-fn delete (pos: Option<&u8>) -> eyre::Result<()> {
+fn delete(arg_pos: Option<&u8>) -> eyre::Result<()> {
 
-	// Unwrap pos
-	let id = *pos.expect("'[pos]' was not provided") as usize -1;
-
+	// Get path id from pos arg, throw error if None
+	let id = arg_pos.map(pos_to_id()).expect("'[pos]' was not provided");
 	let mut lines = read_lines()?;
 
 	// Check id
 	if id >= lines.len() {
-		return Err(eyre::eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, lines.len()));
+		return get_invalid_pos_err(id, lines.len());
 	}
 
 	// Get copy of path
-	let path_str: String = lines[id].clone();
+	let path: String = lines[id].clone();
 
 	// Remove path from list
 	lines.remove(id);
 	save_lines(lines)?;
 
 	// Print confirmation message
-	print_ok("deleted".purple(), format!("{} {}", fmt_number(id), path_str));
-
+	print_ok("deleted".purple(), format!("{} {}", fmt_id(id), path));
 	Ok(())
 }
 
 // Print shell wrapper function
-fn dump_wrapper (shell: Option<&String>) -> eyre::Result<()> {
+fn dump_wrapper(arg_shell: Option<&String>) -> eyre::Result<()> {
+	// TODO: match shell type
+
 	let function = include_str!("wrapper.sh");
 	println!("{}", function);
-
 	Ok(())
 }
 
 
 // Print n lines from path list
-fn list_lines(lines: Vec<String>, n: usize) -> eyre::Result<()> {
+fn print_lines(lines: Vec<String>, n: usize) -> eyre::Result<()> {
 
 	for i in 0..n {
 		// Format each line depending on whether it is a directory
 		if Path::new(&lines[i]).is_dir() {
-			println!("{} {}", fmt_number(i), lines[i]);
+			println!("{} {}", fmt_id(i), lines[i]);
 		} else {
-			println!("{}", format!("{} {} [*]", fmt_number(i), lines[i]).strikethrough().dimmed());
+			println!("{}", format!("{} {} [*]", fmt_id(i), lines[i]).strikethrough().dimmed());
 		};
 	}
 
@@ -278,55 +268,55 @@ fn list_lines(lines: Vec<String>, n: usize) -> eyre::Result<()> {
 
 // Get list of paths from PATH_FILE
 fn read_lines() -> eyre::Result<Vec<String>> {
-	let mut result = Vec::new();
 
-	// Expanded path file String
-	let fstr = shellexpand::tilde(PATH_FILE).into_owned();
-	// Expanded path file Path
-	let file = Path::new(&fstr);
-
-	// Check path file existence
-	if !file.try_exists().expect("can't check existence of path file") {
-		return Err(eyre::eyre!("path file doesn't exist"));
-	}
-
-	// Read path file
-	let text = fs::read_to_string(file).expect("can't read path file");
-
-	// Parse text to lines
-	for line in text.lines() {
-		if !line.is_empty() {
-			result.push(line.to_string());
-		}
-	}
-
-	// Return lines
-	Ok(result)
+	Ok(
+		// Read path file and parse
+		fs::read_to_string(get_path_file()?)
+			.expect("can't read path file")
+			.lines()
+			.filter(|l| !l.is_empty())
+			.map(|l| l.to_string())
+			.collect::<Vec<String>>()
+	)
 }
 
 // Save list of paths to PATH_FILE
-fn save_lines (lines: Vec<String>) -> eyre::Result<()> {
-
-	// Expanded path file String
-	let fstr = shellexpand::tilde(PATH_FILE).into_owned();
-	// Expanded path file Path
-	let file = Path::new(&fstr);
-
-	// Check path file existence
-	if !file.try_exists().expect("can't check existence of path file") {
-		return Err(eyre::eyre!("path file doesn't exist"));
-	}
+fn save_lines(lines: Vec<String>) -> eyre::Result<()> {
 
 	// Open path file
-	let mut buffer= fs::File::create(file)?;
+	let mut file= fs::File::create(get_path_file()?)?;
 
 	// Write lines to file
 	for l in lines {
-		buffer.write(l.as_bytes())?;
-		buffer.write("\n".as_bytes())?;
+		writeln!(file, "{l}")?;
 	}
 
 	Ok(())
+}
+
+fn get_path_file() -> eyre::Result<PathBuf> {
+
+	// Expanded path file String
+	let path_str = shellexpand::tilde(PATH_FILE).into_owned();
+
+	// Expanded path file Path
+	let path = Path::new(&path_str);
+
+	// Check path file existence
+	if !path.try_exists().expect("can't check existence of path file") {
+		return Err(eyre!("path file doesn't exist"));
+	}
+
+	Ok(path.to_owned())
+}
+
+// Get closure for maping position to id
+fn pos_to_id() -> impl Fn(&u8) -> usize {
+	|&pos| (pos - 1) as usize
+}
+
+fn get_invalid_pos_err(id: usize, n_lines: usize) -> eyre::Result<()> {
+	return Err(eyre!("invalid value '{}' for '[pos]': only {} paths are saved", id + 1, n_lines));
 }
 
 // Print confirmation message
@@ -335,11 +325,11 @@ fn print_ok(header: ColoredString, body: String) {
 }
 
 // Get formated path id
-fn fmt_number(id: usize) -> String {
+fn fmt_id(id: usize) -> String {
 	format!("[{}]", id +1)
 }
 
 // // Get formated path
 // fn fmt_path(id: usize, path: &String) -> String {
-// 	format!("{} {}", fmt_number(id), path)
+// 	format!("{} {}", fmt_id(id), path)
 // }
