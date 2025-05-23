@@ -220,8 +220,8 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Fail> {
 
 	// Print confirmation message
 	match existing_id {
-		Some(rm_id) => print_ok("moved".cyan(), format!("{} -> {} {}", fmt_id(rm_id), fmt_id(id), path)),
-		None => print_ok("saved".green(), format!("{} {}", fmt_id(id), path)),
+		Some(rm_id) => print_ok("moved".cyan(), format!("{} -> {}", fmt_id(rm_id), fmt_path(id, path))),
+		None => print_ok("saved".green(), fmt_path(id, path)),
 	}
 
 	Ok(())
@@ -279,7 +279,7 @@ fn delete(arg_pos: Option<&u8>) -> Result<(), Fail> {
 	save_lines(lines)?;
 
 	// Print confirmation message
-	print_ok("deleted".purple(), format!("{} {}", fmt_id(id), path));
+	print_ok("deleted".purple(), fmt_path(id, &path));
 	Ok(())
 }
 
@@ -299,9 +299,9 @@ fn print_lines(lines: Vec<String>, n: usize) {
 	for i in 0..n {
 		// Format each line depending on whether it is a directory
 		if Path::new(&lines[i]).is_dir() {
-			println!("{} {}", fmt_id(i), lines[i]);
+			println!("{}", fmt_path(i, &lines[i]));
 		} else {
-			println!("{}", format!("{} {} [*]", fmt_id(i), lines[i]).strikethrough().dimmed());
+			println!("{}", format!("{} [*]", fmt_path(i, &lines[i])).strikethrough().dimmed());
 		};
 	}
 }
@@ -384,7 +384,7 @@ fn fmt_id(id: usize) -> String {
 	format!("[{}]", id_to_pos(id))
 }
 
-// // Get formated path
-// fn fmt_path(id: usize, path: &String) -> String {
-// 	format!("{} {}", fmt_id(id), path)
-// }
+// Get formated path
+fn fmt_path(id: usize, path: &String) -> String {
+	format!("{} {}", fmt_id(id), path)
+}
