@@ -298,7 +298,8 @@ fn delete(arg_pos: Option<&u8>) -> Result<(), Error> {
 	save_lines(lines)?;
 
 	// Print confirmation message
-	print_ok("deleted".purple(), fmt_path(id, &path));
+	// TODO: Use strikable format
+	print_ok("deleted".purple(), fmt_strikeable_path(id, &path));
 	Ok(())
 }
 
@@ -347,7 +348,8 @@ fn ask_to_remove(id: usize, mut lines: Vec<String>) -> Result<(), Error> {
 
 						// Print confirmation message and quit
 						println!();
-						print_ok("deleted".purple(), fmt_path(id, &path));
+						// TODO: Use strikeable format
+						print_ok("deleted".purple(), fmt_strikeable_path(id, &path));
 						return Ok(());
 					}
 					else if first_char == 'N' || first_char == 'n' {
@@ -368,12 +370,7 @@ fn ask_to_remove(id: usize, mut lines: Vec<String>) -> Result<(), Error> {
 fn print_lines(lines: Vec<String>, n: usize) {
 
 	for i in 0..n {
-		// Format each line depending on whether it is a directory
-		if Path::new(&lines[i]).is_dir() {
-			println!("{}", fmt_path(i, &lines[i]));
-		} else {
-			println!("{}", format!("{} [*]", fmt_path(i, &lines[i])).strikethrough().dimmed());
-		};
+		println!("{}", fmt_strikeable_path(i, &lines[i]));
 	}
 }
 
@@ -425,6 +422,15 @@ fn get_path_file() -> Result<PathBuf, Error> {
 // Get InvalidPosValue Error
 fn get_invalid_pos_err(id: usize, n_lines: usize) -> Result<(), Error> {
 	return Err(Error::InvalidPosValue(id, n_lines));
+}
+
+// Format and print given path depending on whether it is a directory
+fn fmt_strikeable_path(id: usize, line: &String) -> String {
+		if Path::new(line).is_dir() {
+			fmt_path(id, line)
+		} else {
+			format!("{} [*]", fmt_path(id, line)).strikethrough().dimmed().to_string()
+		}
 }
 
 // Print errors
