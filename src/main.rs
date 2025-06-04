@@ -283,23 +283,15 @@ fn delete(arg_pos: Option<&u8>) -> Result<(), Error> {
 
 	// Get path id from pos arg, throw error if None
 	let id = arg_pos.map(pos_to_id()).expect("FATAL: '[pos]' was not provided");
-	let mut lines = read_lines()?;
+	let lines = read_lines()?;
 
 	// Check id
 	if id >= lines.len() {
 		return get_invalid_pos_err(id, lines.len());
 	}
 
-	// Get copy of path
-	let path: String = lines[id].clone();
+	remove_path(id, lines)?;
 
-	// Remove path from list
-	lines.remove(id);
-	save_lines(lines)?;
-
-	// Print confirmation message
-	// TODO: Use strikable format
-	print_ok("deleted".purple(), fmt_strikeable_path(id, &path));
 	Ok(())
 }
 
@@ -313,7 +305,7 @@ fn dump_wrapper(arg_shell: Option<&String>) -> Result<(), Error> {
 }
 
 
-fn ask_to_remove(id: usize, mut lines: Vec<String>) -> Result<(), Error> {
+fn ask_to_remove(id: usize, lines: Vec<String>) -> Result<(), Error> {
 	eprintln!();
 
 	// Path to remove
@@ -338,19 +330,9 @@ fn ask_to_remove(id: usize, mut lines: Vec<String>) -> Result<(), Error> {
 				// Get first char from input
 				if let Some(first_char) = input.trim().chars().next() {
 					if first_char == 'Y' || first_char == 'y' {
-
-						// Get copy of path
-						let path: String = lines[id].clone();
-
-						// Remove path from list
-						lines.remove(id);
-						save_lines(lines)?;
-
-						// Print confirmation message and quit
+						// Remove path from file & quit
 						println!();
-						// TODO: Use strikeable format
-						print_ok("deleted".purple(), fmt_strikeable_path(id, &path));
-						return Ok(());
+						return remove_path(id, lines);
 					}
 					else if first_char == 'N' || first_char == 'n' {
 						// Quit
@@ -364,6 +346,21 @@ fn ask_to_remove(id: usize, mut lines: Vec<String>) -> Result<(), Error> {
 		// Clear buffor
 		input.clear();
 	}
+}
+
+// Remove path from path file
+fn remove_path(id: usize, mut lines: Vec<String>) -> Result<(), Error> {
+
+	// Get copy of path for printing
+	let path: String = lines[id].clone();
+
+	// Remove path from list & update path file
+	lines.remove(id);
+	save_lines(lines)?;
+
+	// Print confirmation message
+	print_ok("deleted".purple(), fmt_strikeable_path(id, &path));
+	Ok(())
 }
 
 // Print n lines from path list
