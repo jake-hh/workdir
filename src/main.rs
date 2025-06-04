@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_variables)]
 
-use clap::{arg, command, value_parser, Arg, Command};
+use clap::{arg, command, value_parser, Arg, Command, ColorChoice};
+use clap::builder::styling::{Styles, Color, AnsiColor};
 use colored::{Colorize, ColoredString, control};
 use std::cmp::min;
 use std::path::{Path, PathBuf};
@@ -69,12 +70,20 @@ fn main() {
 	// Force colored output regardless of TTY
 	control::set_override(true);
 
+	let styles: Styles = Styles::styled()
+		.header(AnsiColor::BrightGreen.on_default().bold().underline().underline_color(Some(Color::Ansi(AnsiColor::Black))))
+		.usage(AnsiColor::BrightGreen.on_default().bold().underline().underline_color(Some(Color::Ansi(AnsiColor::Black))))
+		.placeholder(AnsiColor::BrightBlack.on_default());
+
 	// Parse specified CLI args
 	let args = command!() 	// requires 'cargo' feature
-		.about("workdir - fast working directory path switcher")
+		.about("workdir - fast 'working directory' switcher")
 		.author("jake")
-		.disable_help_subcommand(true)
+		.disable_version_flag(false)
+		.disable_help_subcommand(false)
 		.args_conflicts_with_subcommands(true)
+		.color(ColorChoice::Always)
+		.styles(styles)
 
 		.subcommand(Command::new("list")
 				.about("List recent paths")
@@ -98,7 +107,7 @@ fn main() {
 				.about("Save path")
 				.aliases(["s"])
 				.arg(
-					arg!(<path> "Current directory path - provided by wrapper function - do not enter") //.hide(true)
+					arg!(<path> "Current directory path (provided by wrapper function - do not enter)") //.hide(true)
 					.value_parser(value_parser!(String)))
 				.arg(
 					arg!([pos] "Optional path position")
