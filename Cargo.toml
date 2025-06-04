@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.5.4", features = ["cargo"] }
+clap = { version = "4.5.39", features = ["cargo"] }
 colored = "3.0.0"
-shellexpand = "3.1.0"
+shellexpand = "3.1.1"
 
 # [profile.dev.package.backtrace]
 # opt-level = 3
