@@ -21,12 +21,14 @@ const SHORT_LIST_LINES_LIMIT: usize = 5;
 
 pub enum Warn {
 	InvalidLengthValue(usize, usize),
+	LineWriteFailed(String, std::io::Error),
 }
 
 impl fmt::Display for Warn {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Warn::InvalidLengthValue(len, len_limit) => write!(f, "invalid value '{}' for '{}': only {} paths are saved", len.to_string().yellow(), "[length]".bold(), len_limit),
+			Warn::LineWriteFailed(line, err) => write!(f, "failed writing line '{}' to path file {}", line.yellow(), attach_nested(err)),
 		}
 	}
 }
@@ -37,6 +39,10 @@ pub enum Error {
 	IdenticalPathPos(String),
 	PathLimitReached(),
 	NoPathFile(),
+	CannotCheckFile(std::io::Error),
+	CannotOpenFile(std::io::Error),
+	CannotReadFile(std::io::Error),
+	NoPathArg(),
 }
 
 impl fmt::Display for Error {
@@ -47,8 +53,16 @@ impl fmt::Display for Error {
 			Error::IdenticalPathPos(path) => write!(f, "path '{}' already exists on that position", path.yellow()),
 			Error::PathLimitReached()     => write!(f, "limit of {} saved paths reached", SAVED_PATHS_LIMIT_P1.to_string().red()),
 			Error::NoPathFile()           => write!(f, "path file doesn't exist: '{}'", PATH_FILE),
+			Error::NoPathArg()            => write!(f, "current working path was not provided. Please use the included wrapper"),
+			Error::CannotCheckFile(err)   => write!(f, "cannot check existence of path file {}", attach_nested(err)),
+			Error::CannotOpenFile(err)    => write!(f, "cannot open path file {}", attach_nested(err)),
+			Error::CannotReadFile(err)    => write!(f, "cannot read path file {}", attach_nested(err)),
 		}
 	}
+}
+
+fn attach_nested(err: &std::io::Error) -> String {
+	format!("\n\n{}", err.to_string().red())
 }
 
 
@@ -167,7 +181,7 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Error> {
 	let id = arg_pos.map(pos_to_id()).unwrap_or(0);
 
 	// Unwrap path
-	let path: &String = arg_path.expect("current path was not provided. Please use the included wrapper");
+	let path: &String = arg_path.ok_or(Error::NoPathArg())?;
 
 	// Check if path is a directory
 	if !Path::new(path).is_dir() {
@@ -259,7 +273,7 @@ fn restore(arg_pos: Option<&u8>, arg_verbose: bool) -> Result<(), Error> {
 fn delete(arg_pos: Option<&u8>) -> Result<(), Error> {
 
 	// Get path id from pos arg, throw error if None
-	let id = arg_pos.map(pos_to_id()).expect("'[pos]' was not provided");
+	let id = arg_pos.map(pos_to_id()).expect("FATAL: '[pos]' was not provided");
 	let mut lines = read_lines()?;
 
 	// Check id
@@ -308,7 +322,7 @@ fn read_lines() -> Result<Vec<String>, Error> {
 	Ok(
 		// Read path file and parse
 		fs::read_to_string(get_path_file()?)
-			.expect("can't read path file")
+			.map_err(|e| Error::CannotReadFile(e))?
 			.lines()
 			.filter(|l| !l.is_empty())
 			.map(|l| l.to_string())
@@ -320,11 +334,11 @@ fn read_lines() -> Result<Vec<String>, Error> {
 fn save_lines(lines: Vec<String>) -> Result<(), Error> {
 
 	// Open path file
-	let mut file= fs::File::create(get_path_file()?).expect("Could not open file");
+	let mut file= fs::File::create(get_path_file()?).map_err(|e| Error::CannotOpenFile(e))?;
 
 	// Write lines to file
 	for l in lines {
-		writeln!(file, "{l}").unwrap_or_else(|e| eprintln!("write failed: {e}"));
+		writeln!(file, "{l}").unwrap_or_else(|e| print_warning(Warn::LineWriteFailed(l, e)));
 	}
 
 	Ok(())
@@ -340,7 +354,7 @@ fn get_path_file() -> Result<PathBuf, Error> {
 	let path = Path::new(&path_str);
 
 	// Check path file existence
-	if !path.try_exists().expect("can't check existence of path file") {
+	if !path.try_exists().map_err(|e| Error::CannotCheckFile(e))? {
 		return Err(Error::NoPathFile());
 	}
 
