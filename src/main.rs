@@ -18,10 +18,6 @@ const SAVED_PATHS_LIMIT_P1: usize = 20;
 // Max amount of printed lines in short list
 const SHORT_LIST_LINES_LIMIT: usize = 5;
 
-pub enum Fail {
-	Err(Error),
-	Warn(Warn)
-}
 
 pub enum Warn {
 	InvalidLengthValue(usize, usize),
@@ -129,14 +125,14 @@ fn main() -> eyre::Result<()> {
 	};
 
 	// if let Some(e) = result.err() {
-	result.unwrap_or_else(|e| print_fail(e));
+	result.unwrap_or_else(|e| print_error(e));
 
 	Ok(())
 }
 
 
 // List paths
-fn list(arg_length: Option<&u8>) -> Result<(), Fail> {
+fn list(arg_length: Option<&u8>) -> Result<(), Error> {
 	let lines = read_lines()?;
 	let n_lines = lines.len();
 
@@ -145,7 +141,7 @@ fn list(arg_length: Option<&u8>) -> Result<(), Fail> {
 
 	// If length arg is bigger than number of lines => Throw error msg
 	if n > n_lines {
-		print_fail(Fail::Warn(Warn::InvalidLengthValue(n, n_lines)));
+		print_warning(Warn::InvalidLengthValue(n, n_lines));
 		n = n_lines;
 	}
 
@@ -154,7 +150,7 @@ fn list(arg_length: Option<&u8>) -> Result<(), Fail> {
 }
 
 // Short list
-fn l() -> Result<(), Fail> {
+fn l() -> Result<(), Error> {
 	let lines = read_lines()?;
 
 	// Get number of printed lines
@@ -165,7 +161,7 @@ fn l() -> Result<(), Fail> {
 }
 
 // Save or move current PWD path in path list
-fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Fail> {
+fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Error> {
 
 	// Get new path id from pos arg, default to 0
 	let id = arg_pos.map(pos_to_id()).unwrap_or(0);
@@ -175,7 +171,7 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Fail> {
 
 	// Check if path is a directory
 	if !Path::new(path).is_dir() {
-		return Err(Fail::Err(Error::PathIsNotDir(path.clone())));
+		return Err(Error::PathIsNotDir(path.clone()));
 	}
 
 	let mut lines = read_lines()?;
@@ -194,7 +190,7 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Fail> {
 
 		// If line already exists at that position => Throw error msg
 		if ex_id == id {
-			return Err(Fail::Err(Error::IdenticalPathPos(path.clone())));
+			return Err(Error::IdenticalPathPos(path.clone()));
 		}
 
 		// Line already exists at a different position => Remove old path from list
@@ -210,7 +206,7 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Fail> {
 
 		// Check n_lines
 		if n_lines >= SAVED_PATHS_LIMIT_P1 {
-			return Err(Fail::Err(Error::PathLimitReached()));
+			return Err(Error::PathLimitReached());
 		}
 	}
 
@@ -228,7 +224,7 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Fail> {
 }
 
 // Change directory to one of saved paths
-fn restore(arg_pos: Option<&u8>, arg_verbose: bool) -> Result<(), Fail> {
+fn restore(arg_pos: Option<&u8>, arg_verbose: bool) -> Result<(), Error> {
 
 	// Get path id from pos arg, default to 0
 	let id = arg_pos.map(pos_to_id()).unwrap_or(0);
@@ -246,7 +242,7 @@ fn restore(arg_pos: Option<&u8>, arg_verbose: bool) -> Result<(), Fail> {
 	// Check if path is a directory
 	if !Path::new(line).is_dir() {
 		// TODO: Remove that path from the list
-		return Err(Fail::Err(Error::PathIsNotDir(line.to_string())));
+		return Err(Error::PathIsNotDir(line.to_string()));
 	}
 
 	// Tell the wrapper to cd to selected path
@@ -260,7 +256,7 @@ fn restore(arg_pos: Option<&u8>, arg_verbose: bool) -> Result<(), Fail> {
 }
 
 // Delete one of saved paths
-fn delete(arg_pos: Option<&u8>) -> Result<(), Fail> {
+fn delete(arg_pos: Option<&u8>) -> Result<(), Error> {
 
 	// Get path id from pos arg, throw error if None
 	let id = arg_pos.map(pos_to_id()).expect("'[pos]' was not provided");
@@ -284,7 +280,7 @@ fn delete(arg_pos: Option<&u8>) -> Result<(), Fail> {
 }
 
 // Print shell wrapper function
-fn dump_wrapper(arg_shell: Option<&String>) -> Result<(), Fail> {
+fn dump_wrapper(arg_shell: Option<&String>) -> Result<(), Error> {
 	// TODO: match shell type
 
 	let function = include_str!("wrapper.sh");
@@ -307,7 +303,7 @@ fn print_lines(lines: Vec<String>, n: usize) {
 }
 
 // Get list of paths from PATH_FILE
-fn read_lines() -> Result<Vec<String>, Fail> {
+fn read_lines() -> Result<Vec<String>, Error> {
 
 	Ok(
 		// Read path file and parse
@@ -321,7 +317,7 @@ fn read_lines() -> Result<Vec<String>, Fail> {
 }
 
 // Save list of paths to PATH_FILE
-fn save_lines(lines: Vec<String>) -> Result<(), Fail> {
+fn save_lines(lines: Vec<String>) -> Result<(), Error> {
 
 	// Open path file
 	let mut file= fs::File::create(get_path_file()?).expect("Could not open file");
@@ -335,7 +331,7 @@ fn save_lines(lines: Vec<String>) -> Result<(), Fail> {
 }
 
 // Check path file & return its path
-fn get_path_file() -> Result<PathBuf, Fail> {
+fn get_path_file() -> Result<PathBuf, Error> {
 
 	// Expanded path file String
 	let path_str = shellexpand::tilde(PATH_FILE).into_owned();
@@ -345,23 +341,24 @@ fn get_path_file() -> Result<PathBuf, Fail> {
 
 	// Check path file existence
 	if !path.try_exists().expect("can't check existence of path file") {
-		return Err(Fail::Err(Error::NoPathFile()));
+		return Err(Error::NoPathFile());
 	}
 
 	Ok(path.to_owned())
 }
 
 // Get InvalidPosValue Error
-fn get_invalid_pos_err(id: usize, n_lines: usize) -> Result<(), Fail> {
-	return Err(Fail::Err(Error::InvalidPosValue(id, n_lines)));
+fn get_invalid_pos_err(id: usize, n_lines: usize) -> Result<(), Error> {
+	return Err(Error::InvalidPosValue(id, n_lines));
 }
 
 // Print errors
-fn print_fail(fail: Fail) {
-	match fail {
-		Fail::Warn(warn) => eprintln!("{} {}\n", "warning:".bold().yellow(), warn),
-		Fail::Err(err) => eprintln!("{} {}", "error:".bold().red(), err)
-	};
+fn print_error(err: Error) {
+	eprintln!("{} {}", "error:".bold().red(), err);
+}
+// Print warning
+fn print_warning(warn: Warn) {
+	eprintln!("{} {}\n", "warning:".bold().yellow(), warn);
 }
 
 // Print confirmation message
