@@ -1,7 +1,6 @@
 #![allow(dead_code, unused_variables)]
 
 use clap::{arg, command, value_parser, Arg, Command};
-use color_eyre::eyre;
 use colored::{Colorize, ColoredString, control};
 use std::cmp::min;
 use std::path::{Path, PathBuf};
@@ -66,11 +65,9 @@ fn attach_nested(err: &std::io::Error) -> String {
 }
 
 
-fn main() -> eyre::Result<()> {
+fn main() {
 	// Force colored output regardless of TTY
 	control::set_override(true);
-	// Enable colored error messages (Does not preserve printing order)
-	color_eyre::install()?;
 
 	// Parse specified CLI args
 	let args = command!() 	// requires 'cargo' feature
@@ -140,8 +137,6 @@ fn main() -> eyre::Result<()> {
 
 	// if let Some(e) = result.err() {
 	result.unwrap_or_else(|e| print_error(e));
-
-	Ok(())
 }
 
 
