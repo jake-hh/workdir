@@ -5,7 +5,7 @@ use clap::builder::styling::{Styles, Color, AnsiColor};
 use colored::{Colorize, ColoredString, control};
 use std::cmp::min;
 use std::path::{Path, PathBuf};
-use std::io::Write;
+use std::io::{self, Write};
 use std::fs;
 use std::fmt;
 
@@ -22,6 +22,7 @@ const SHORT_LIST_LINES_LIMIT: usize = 5;
 pub enum Warn {
 	InvalidLengthValue(usize, usize),
 	LineWriteFailed(String, std::io::Error),
+	CannotFlush(std::io::Error),
 }
 
 impl fmt::Display for Warn {
@@ -29,6 +30,7 @@ impl fmt::Display for Warn {
 		match self {
 			Warn::InvalidLengthValue(len, len_limit) => write!(f, "invalid value '{}' for '{}': only {} paths are saved", len.to_string().yellow(), "[length]".bold(), len_limit),
 			Warn::LineWriteFailed(line, err) => write!(f, "failed writing line '{}' to path file {}", line.yellow(), attach_nested(err)),
+			Warn::CannotFlush(err)   => write!(f, "cannot flush stderr stream {}", attach_nested(err)),
 		}
 	}
 }
@@ -39,10 +41,11 @@ pub enum Error {
 	IdenticalPathPos(String),
 	PathLimitReached(),
 	NoPathFile(),
+	NoPathArg(),
 	CannotCheckFile(std::io::Error),
 	CannotOpenFile(std::io::Error),
 	CannotReadFile(std::io::Error),
-	NoPathArg(),
+	CannotReadInput(String, std::io::Error),
 }
 
 impl fmt::Display for Error {
@@ -57,6 +60,7 @@ impl fmt::Display for Error {
 			Error::CannotCheckFile(err)   => write!(f, "cannot check existence of path file {}", attach_nested(err)),
 			Error::CannotOpenFile(err)    => write!(f, "cannot open path file {}", attach_nested(err)),
 			Error::CannotReadFile(err)    => write!(f, "cannot read path file {}", attach_nested(err)),
+			Error::CannotReadInput(input, err)   => write!(f, "cannot read line from stdin stream, failed at: '{}' {}", input, attach_nested(err)),
 		}
 	}
 }
@@ -259,8 +263,9 @@ fn restore(arg_pos: Option<&u8>, arg_verbose: bool) -> Result<(), Error> {
 
 	// Check if path is a directory
 	if !Path::new(line).is_dir() {
-		// TODO: Remove that path from the list
-		return Err(Error::PathIsNotDir(line.to_string()));
+		print_error(Error::PathIsNotDir(line.to_string()));
+		ask_to_remove(id, lines)?;
+		return Ok(());
 	}
 
 	// Tell the wrapper to cd to selected path
@@ -306,6 +311,58 @@ fn dump_wrapper(arg_shell: Option<&String>) -> Result<(), Error> {
 	Ok(())
 }
 
+
+fn ask_to_remove(id: usize, mut lines: Vec<String>) -> Result<(), Error> {
+	eprintln!();
+
+	// Path to remove
+	let line = &lines[id];
+	// User response buffor
+	let mut input = String::new();
+
+	// Ask repeatedly, quit when user responds correctly
+	loop {
+		eprint!("Remove from list? [y/n]: ");
+
+		// Ensure prompt prints immediately
+		io::stderr().flush().map_err(|e| print_warning(Warn::CannotFlush(e))).ok();
+
+		// Save whole input to buffor
+		match io::stdin().read_line(&mut input) {
+
+			Ok(nbytes) => {
+				// Enter should take one byte
+				assert!(nbytes > 0);
+
+				// Get first char from input
+				if let Some(first_char) = input.trim().chars().next() {
+					if first_char == 'Y' || first_char == 'y' {
+
+						// Get copy of path
+						let path: String = lines[id].clone();
+
+						// Remove path from list
+						lines.remove(id);
+						save_lines(lines)?;
+
+						// Print confirmation message and quit
+						println!();
+						print_ok("deleted".purple(), fmt_path(id, &path));
+						return Ok(());
+					}
+					else if first_char == 'N' || first_char == 'n' {
+						// Quit
+						return Ok(());
+					}
+				}
+			}
+			Err(e) => return Err(Error::CannotReadInput(input, e))
+		}
+
+		// Clear buffor
+		input.clear();
+	}
+}
 
 // Print n lines from path list
 fn print_lines(lines: Vec<String>, n: usize) {
