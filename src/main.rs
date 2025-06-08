@@ -308,8 +308,6 @@ fn dump_wrapper(arg_shell: Option<&String>) -> Result<(), Error> {
 fn ask_to_remove(id: usize, lines: Vec<String>) -> Result<(), Error> {
 	eprintln!();
 
-	// Path to remove
-	let line = &lines[id];
 	// User response buffor
 	let mut input = String::new();
 
