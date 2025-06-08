@@ -21,14 +21,14 @@ const SHORT_LIST_LINES_LIMIT: usize = 5;
 
 pub enum Warn {
 	InvalidLengthValue(usize, usize),
-	LineWriteFailed(String, std::io::Error),
-	CannotFlush(std::io::Error),
+	LineWriteFailed(String, io::Error),
+	CannotFlush(io::Error),
 }
 
 impl fmt::Display for Warn {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Warn::InvalidLengthValue(len, len_limit) => write!(f, "invalid value '{}' for '{}': only {} paths are saved", len.to_string().yellow(), "[length]".bold(), len_limit),
+			Warn::InvalidLengthValue(len, limit) => write!(f, "invalid value '{}' for '{}': only {} paths are saved", len.to_string().yellow(), "[length]".bold(), limit),
 			Warn::LineWriteFailed(line, err) => write!(f, "failed writing line '{}' to path file {}", line.yellow(), attach_nested(err)),
 			Warn::CannotFlush(err)   => write!(f, "cannot flush stderr stream {}", attach_nested(err)),
 		}
@@ -39,13 +39,13 @@ pub enum Error {
 	InvalidPosValue(usize, usize),
 	PathIsNotDir(String),
 	IdenticalPathPos(String),
-	PathLimitReached(),
-	NoPathFile(),
-	NoPathArg(),
-	CannotCheckFile(std::io::Error),
-	CannotOpenFile(std::io::Error),
-	CannotReadFile(std::io::Error),
-	CannotReadInput(String, std::io::Error),
+	PathLimitReached,
+	NoPathFile,
+	NoPathArg,
+	CannotCheckFile(io::Error),
+	CannotOpenFile(io::Error),
+	CannotReadFile(io::Error),
+	CannotReadInput(String, io::Error),
 }
 
 impl fmt::Display for Error {
@@ -54,9 +54,9 @@ impl fmt::Display for Error {
 			Error::InvalidPosValue(id, length) => write!(f, "invalid value '{}' for '{}': only {} paths are saved", id_to_pos(*id).to_string().yellow(), "[pos]".bold(), length),
 			Error::PathIsNotDir(path)     => write!(f, "'{}' is not a directory", path.yellow()),
 			Error::IdenticalPathPos(path) => write!(f, "path '{}' already exists on that position", path.yellow()),
-			Error::PathLimitReached()     => write!(f, "limit of {} saved paths reached", SAVED_PATHS_LIMIT_P1.to_string().red()),
-			Error::NoPathFile()           => write!(f, "path file doesn't exist: '{}'", PATH_FILE),
-			Error::NoPathArg()            => write!(f, "current working path was not provided. Please use the included wrapper"),
+			Error::PathLimitReached     => write!(f, "limit of {} saved paths reached", SAVED_PATHS_LIMIT_P1.to_string().red()),
+			Error::NoPathFile           => write!(f, "path file doesn't exist: '{}'", PATH_FILE),
+			Error::NoPathArg            => write!(f, "current working path was not provided. Please use the included wrapper"),
 			Error::CannotCheckFile(err)   => write!(f, "cannot check existence of path file {}", attach_nested(err)),
 			Error::CannotOpenFile(err)    => write!(f, "cannot open path file {}", attach_nested(err)),
 			Error::CannotReadFile(err)    => write!(f, "cannot read path file {}", attach_nested(err)),
@@ -65,7 +65,7 @@ impl fmt::Display for Error {
 	}
 }
 
-fn attach_nested(err: &std::io::Error) -> String {
+fn attach_nested(err: &io::Error) -> String {
 	format!("\n\n{}", err.to_string().red())
 }
 
@@ -189,7 +189,7 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Error> {
 	let id = arg_pos.map(pos_to_id()).unwrap_or(0);
 
 	// Unwrap path
-	let path: &String = arg_path.ok_or(Error::NoPathArg())?;
+	let path: &String = arg_path.ok_or(Error::NoPathArg)?;
 
 	// Check if path is a directory
 	if !Path::new(path).is_dir() {
@@ -228,7 +228,7 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Error> {
 
 		// Check n_lines
 		if n_lines >= SAVED_PATHS_LIMIT_P1 {
-			return Err(Error::PathLimitReached());
+			return Err(Error::PathLimitReached);
 		}
 	}
 
@@ -410,7 +410,7 @@ fn get_path_file() -> Result<PathBuf, Error> {
 
 	// Check path file existence
 	if !path.try_exists().map_err(|e| Error::CannotCheckFile(e))? {
-		return Err(Error::NoPathFile());
+		return Err(Error::NoPathFile);
 	}
 
 	Ok(path.to_owned())
