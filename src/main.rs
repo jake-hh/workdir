@@ -116,7 +116,10 @@ fn main() {
 				.aliases(["s"])
 				.arg(
 					arg!([pos] "Optional path position")
-					.value_parser(value_parser!(u8).range(1..SAVED_PATHS_LIMIT_P1 as i64))))
+					.value_parser(value_parser!(u8).range(1..SAVED_PATHS_LIMIT_P1 as i64)))
+				.arg(
+					arg!([path] "Optional directory path")
+					.value_parser(value_parser!(String))))
 
 		.subcommand(Command::new("delete")
 				.about("Delete selected path")
@@ -142,7 +145,7 @@ fn main() {
 	let result = match args.subcommand() {
 		Some(("list", subargs))    => list(subargs.get_one::<u8>("length")),
 		Some(("l", _))                          => l(),
-		Some(("save", subargs))    => save(subargs.get_one::<u8>("pos")),
+		Some(("save", subargs))    => save(subargs.get_one::<u8>("pos"), subargs.get_one::<String>("path")),
 		Some(("restore", subargs)) => restore(subargs.get_one::<u8>("pos"), subargs.get_flag("verbose")),
 		Some(("delete", subargs))  => delete(subargs.get_one::<u8>("pos")),
 		Some(("wrapper", subargs)) => dump_wrapper(subargs.get_one::<String>("shell")),
@@ -183,16 +186,14 @@ fn l() -> Result<(), Error> {
 	Ok(())
 }
 
-// Save or move current path in path list
-fn save(arg_pos: Option<&u8>) -> Result<(), Error> {
+// Save or move selected path in path list
+fn save(arg_pos: Option<&u8>, arg_path: Option<&String>) -> Result<(), Error> {
 
 	// Get new path id from pos arg, default to 0
 	let id = arg_pos.map(pos_to_id()).unwrap_or(0);
 
-	// Get current working dir
-    let path_buf: PathBuf = env::current_dir().map_err(|e| Error::CannotGetCWD(e))?;
-
-	let path: String = path_buf.into_os_string().into_string().map_err(|str| Error::CannotParseCWD(str))?;
+	// Get new path from path arg, default to current working dir
+	let path = get_path(arg_path)?;
 
 	// Check if path is a directory
 	if !Path::new(&path).is_dir() {
@@ -307,6 +308,25 @@ fn dump_wrapper(arg_shell: Option<&String>) -> Result<(), Error> {
 	Ok(())
 }
 
+
+// Get new path & convert to string
+fn get_path(arg_path: Option<&String>) -> Result<String, Error> {
+
+	// Check if user has given a relative path
+	if let Some(relative_path) = arg_path {
+		// Get absolute path from relative path
+		fs::canonicalize(relative_path).map_err(|_| Error::PathIsNotDir(relative_path.to_owned()))?
+	}
+	else {
+		// Get current working dir
+		env::current_dir().map_err(|e| Error::CannotGetCWD(e))?
+	}
+
+	// Convert PathBuf to String & return
+	.into_os_string()
+	.into_string()
+	.map_err(|path| Error::CannotParseCWD(path))
+}
 
 fn ask_to_remove(id: usize, lines: Vec<String>) -> Result<(), Error> {
 	eprintln!();
