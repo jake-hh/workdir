@@ -4,24 +4,8 @@
 # $> source src/wrapper.dev.sh
 
 function wd {
-	# check arguments & run workdir
-	if [ -z "$1" ]
-	then
-		# when no args found
-		x=`cargo run --`
-	else
-		subcmd="$1"
-		shift
-
-		if [ "$subcmd" = "save" ] || [ "$subcmd" = "s" ]
-		then
-			# when save subcommand found
-			x=`cargo run -- "$subcmd" "$PWD" "$@"`
-		else
-			# when other args found
-			x=`cargo run -- "$subcmd" "$@"`
-		fi
-	fi
+	# run workdir
+	x=`cargo run -- "$@"`
 
 	# check workdir output
 	if [ "${x::6}" = "CHDIRV" ]

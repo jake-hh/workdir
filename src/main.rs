@@ -5,9 +5,11 @@ use clap::builder::styling::{Styles, Color, AnsiColor};
 use colored::{Colorize, ColoredString, control};
 use std::cmp::min;
 use std::path::{Path, PathBuf};
+use std::ffi::OsString;
 use std::io::{self, Write};
 use std::fs;
 use std::fmt;
+use std::env;
 
 // File used to store a list of paths (working directories)
 static PATH_FILE: &str = "~/.local/state/workdir";
@@ -41,11 +43,12 @@ pub enum Error {
 	IdenticalPathPos(String),
 	PathLimitReached,
 	NoPathFile,
-	NoPathArg,
 	CannotCheckFile(io::Error),
 	CannotOpenFile(io::Error),
 	CannotReadFile(io::Error),
 	CannotReadInput(String, io::Error),
+	CannotGetCWD(io::Error),
+	CannotParseCWD(OsString)
 }
 
 impl fmt::Display for Error {
@@ -56,11 +59,12 @@ impl fmt::Display for Error {
 			Error::IdenticalPathPos(path) => write!(f, "path '{}' already exists on that position", path.yellow()),
 			Error::PathLimitReached     => write!(f, "limit of {} saved paths reached", SAVED_PATHS_LIMIT_P1.to_string().red()),
 			Error::NoPathFile           => write!(f, "path file doesn't exist: '{}'", PATH_FILE),
-			Error::NoPathArg            => write!(f, "current working path was not provided. Please use the included wrapper"),
 			Error::CannotCheckFile(err)   => write!(f, "cannot check existence of path file {}", attach_nested(err)),
 			Error::CannotOpenFile(err)    => write!(f, "cannot open path file {}", attach_nested(err)),
 			Error::CannotReadFile(err)    => write!(f, "cannot read path file {}", attach_nested(err)),
 			Error::CannotReadInput(input, err)   => write!(f, "cannot read line from stdin stream, failed at: '{}' {}", input, attach_nested(err)),
+			Error::CannotGetCWD(err)      => write!(f, "cannot get current dir - insufficient permissions or dir does not exist {}", attach_nested(err)),
+			Error::CannotParseCWD(os_str)    => write!(f, "cannot convert current dir path to UTF-8 String, non Unicode symbols found: {}", os_str.to_string_lossy()),
 		}
 	}
 }
@@ -111,9 +115,6 @@ fn main() {
 				.about("Save path")
 				.aliases(["s"])
 				.arg(
-					arg!(<path> "Current directory path (provided by wrapper function - do not enter)") //.hide(true)
-					.value_parser(value_parser!(String)))
-				.arg(
 					arg!([pos] "Optional path position")
 					.value_parser(value_parser!(u8).range(1..SAVED_PATHS_LIMIT_P1 as i64))))
 
@@ -141,7 +142,7 @@ fn main() {
 	let result = match args.subcommand() {
 		Some(("list", subargs))    => list(subargs.get_one::<u8>("length")),
 		Some(("l", _))                          => l(),
-		Some(("save", subargs))    => save(subargs.get_one::<String>("path"), subargs.get_one::<u8>("pos")),
+		Some(("save", subargs))    => save(subargs.get_one::<u8>("pos")),
 		Some(("restore", subargs)) => restore(subargs.get_one::<u8>("pos"), subargs.get_flag("verbose")),
 		Some(("delete", subargs))  => delete(subargs.get_one::<u8>("pos")),
 		Some(("wrapper", subargs)) => dump_wrapper(subargs.get_one::<String>("shell")),
@@ -182,25 +183,27 @@ fn l() -> Result<(), Error> {
 	Ok(())
 }
 
-// Save or move current PWD path in path list
-fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Error> {
+// Save or move current path in path list
+fn save(arg_pos: Option<&u8>) -> Result<(), Error> {
 
 	// Get new path id from pos arg, default to 0
 	let id = arg_pos.map(pos_to_id()).unwrap_or(0);
 
-	// Unwrap path
-	let path: &String = arg_path.ok_or(Error::NoPathArg)?;
+	// Get current working dir
+    let path_buf: PathBuf = env::current_dir().map_err(|e| Error::CannotGetCWD(e))?;
+
+	let path: String = path_buf.into_os_string().into_string().map_err(|str| Error::CannotParseCWD(str))?;
 
 	// Check if path is a directory
-	if !Path::new(path).is_dir() {
-		return Err(Error::PathIsNotDir(path.clone()));
+	if !Path::new(&path).is_dir() {
+		return Err(Error::PathIsNotDir(path));
 	}
 
 	let mut lines = read_lines()?;
 	let n_lines = lines.len();
 
 	// Find existing id of path in lines list, if any
-	let existing_id = lines.iter().position(|l| l == path);
+	let existing_id: Option<usize> = lines.iter().position(|line| line == &path);
 
 	if let Some(ex_id) = existing_id {
 		// Will be moving the path to new position
@@ -238,8 +241,8 @@ fn save(arg_path: Option<&String>, arg_pos: Option<&u8>) -> Result<(), Error> {
 
 	// Print confirmation message
 	match existing_id {
-		Some(rm_id) => print_ok("moved".cyan(), format!("{} -> {}", fmt_id(rm_id), fmt_path(id, path))),
-		None => print_ok("saved".green(), fmt_path(id, path)),
+		Some(rm_id) => print_ok("moved".cyan(), format!("{} -> {}", fmt_id(rm_id), fmt_path(id, &path))),
+		None => print_ok("saved".green(), fmt_path(id, &path)),
 	}
 
 	Ok(())
